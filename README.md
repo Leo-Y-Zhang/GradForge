@@ -74,7 +74,7 @@ gradforge/gradcheck.py   the central-difference checker the tests are built on
 gradforge/data.py        char codec + batching over the bundled excerpt
 gradforge/train.py       bounded demo training (python -m gradforge.train)
 gradforge/sample.py      text generation      (python -m gradforge.sample)
-tests/                   the proof obligations (42 tests)
+tests/                   the proof obligations (44 tests)
 docs/DESIGN.md           architecture and the measured numpy decision
 ```
 
@@ -94,9 +94,9 @@ memory management, operator fusion, a stable public API, and years of edge
 cases. This has none of that: float64 on CPU, basic-plus-integer-array
 indexing only, scalar exponents only, and a Tensor API just big enough for
 the model it trains. The point is a complete, verified core that one person
-can read end to end: 301 lines for the engine, 57 for the composed math,
-161 for the layers, 62 for the optimizers, 71 for the gradient checker --
-652 lines of source for a working, gradient-checked transformer.
+can read end to end: 309 lines for the engine, 57 for the composed math,
+161 for the layers, 62 for the optimizers, 75 for the gradient checker --
+664 lines of source for a working, gradient-checked transformer.
 
 ## License
 

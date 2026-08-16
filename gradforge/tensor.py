@@ -102,6 +102,14 @@ class Tensor:
             for child in node._prev:
                 if id(child) not in visited:
                     stack.append((child, False))
+        # Gradient on an intermediate node is transient state from one pass.
+        # Leaving it in place makes a second backward over the same graph
+        # accumulate on top of the first and hand the leaves a larger number
+        # than the derivative, so clear the interior before starting. Leaves
+        # (no _backward) are untouched: accumulating there is the point.
+        for node in topo:
+            if node._backward is not None:
+                node.grad = None
         self.grad = np.asarray(grad, dtype=np.float64).reshape(self.data.shape)
         for node in reversed(topo):
             if node._backward is not None and node.grad is not None:

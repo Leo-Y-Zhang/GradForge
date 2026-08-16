@@ -19,6 +19,20 @@ def test_reused_tensor_accumulates_grad():
     assert np.allclose(x.grad, [5.0])
 
 
+def test_second_backward_over_same_graph_repeats_the_same_gradient():
+    # Intermediate nodes carry only transient gradient. If a second backward
+    # over the same graph finds them still holding the first pass's values it
+    # accumulates on top of those and pushes an inflated gradient down to the
+    # leaf -- silently, with no error and no shape mismatch to give it away.
+    x = Tensor([2.0], requires_grad=True)
+    y = (x * x).sum()  # dy/dx = 2x = 4
+    y.backward()
+    assert np.allclose(x.grad, [4.0])
+    x.grad = None
+    y.backward()
+    assert np.allclose(x.grad, [4.0])
+
+
 def test_backward_needs_scalar():
     x = Tensor([1.0, 2.0], requires_grad=True)
     with pytest.raises(ValueError):
