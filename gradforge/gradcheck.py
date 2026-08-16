@@ -43,9 +43,12 @@ def gradcheck(fn, wrt, h: float = 1e-5, tol: float = 1e-6,
 
     max_rel = 0.0
     for p, ana in zip(wrt, analytic):
-        flat = p.data.reshape(-1)
+        # Perturb through a multi-index, not a flattened view: reshape(-1) of
+        # a non-contiguous array (a transposed or strided one) is a COPY, and
+        # writing to it would leave the real tensor untouched -- a checker
+        # that reports a numeric gradient of exactly zero for everything.
         ana_flat = ana.reshape(-1)
-        n = flat.size
+        n = p.data.size
         if max_elems is not None and n > max_elems:
             if rng is None:
                 raise ValueError("sampling requires an rng")
@@ -53,12 +56,13 @@ def gradcheck(fn, wrt, h: float = 1e-5, tol: float = 1e-6,
         else:
             idxs = np.arange(n)
         for i in idxs:
-            orig = flat[i]
-            flat[i] = orig + h
+            ix = np.unravel_index(i, p.data.shape)
+            orig = p.data[ix]
+            p.data[ix] = orig + h
             fp = float(fn().data)
-            flat[i] = orig - h
+            p.data[ix] = orig - h
             fm = float(fn().data)
-            flat[i] = orig
+            p.data[ix] = orig
             num = (fp - fm) / (2.0 * h)
             a = float(ana_flat[i])
             rel = abs(num - a) / max(1.0, abs(num), abs(a))
