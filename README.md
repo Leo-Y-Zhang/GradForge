@@ -100,5 +100,7 @@ can read end to end: 309 lines for the engine, 57 for the composed math,
 
 ## License
 
-MIT. The bundled Alice excerpt is public domain (typography normalized,
+Proprietary source-available — see [LICENSE](LICENSE). You may read it, run it, and publish what you find, including a refutation. No reuse, modification, redistribution, or use as machine-learning training data.
+
+The bundled Alice excerpt is public domain (typography normalized,
 Project Gutenberg boilerplate removed).
