@@ -1,6 +1,6 @@
 """GradForge CLI.
 
-  gradforge gradcheck [--tol 1e-6] [--verbose]
+  gradforge gradcheck [--tol 1e-6] [--seed N] [--skip-model]
       Check every analytic gradient against a central-difference estimate and
       print the worst relative error for each. This is the repository's central
       claim -- that the engine proves its own derivatives rather than asking to
@@ -83,16 +83,31 @@ def _primitive_cases(rng):
 
     # log needs a strictly positive sample, and relu must avoid the kink: a
     # central difference straddling zero averages two different one-sided
-    # derivatives and disagrees with either.
+    # derivatives and disagrees with either. relu is still checked on both
+    # sides of it -- an all-positive sample exercises only the identity half,
+    # and would pass a backward that forgot to zero the negative inputs.
     j = _t(rng, 3, 3, positive=True)
     add("log", [j], lambda: j.log().sum())
-    add("relu", [j], lambda: j.relu().sum())
+    signs = np.array([[1.0, -1.0, 1.0], [-1.0, 1.0, -1.0], [1.0, -1.0, 1.0]])
+    r = Tensor(j.data * signs, requires_grad=True)
+    add("relu", [r], lambda: r.relu().sum())
 
     k = _t(rng, 3, 4)
     add("sum(axis=1)", [k], lambda: k.sum(axis=1).sum())
     add("mean", [k], lambda: k.mean().sum())
     add("reshape", [k], lambda: k.reshape(4, 3).sum())
     add("transpose", [k], lambda: k.transpose(1, 0).sum())
+
+    # The rest of the primitives, drawn after the cases above so that those
+    # keep the samples (and the errors) they have always had.
+    p = _t(rng, 3, 3, positive=True)
+    add("neg", [k], lambda: (-k).sum())
+    add("pow (scalar exponents)", [p], lambda: (p ** 1.7).sum() + (p ** -0.5).sum())
+    q = _t(rng, 4, 3)
+    rows = np.array([0, 2, 0, 1])  # row 0 twice: its gradient must accumulate
+    add("getitem (repeated rows)", [q], lambda: q[rows].sum())
+    mask = rng.random((4, 3)) < 0.5
+    add("masked_fill", [q], lambda: q.masked_fill(mask, -3.0).sum())
     return cases
 
 
