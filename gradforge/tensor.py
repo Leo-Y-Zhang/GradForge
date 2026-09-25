@@ -303,7 +303,7 @@ class Tensor:
         out = self._make(np.where(mask, value, self.data), (self,), None)
 
         def backward():
-            self._accum(np.where(mask, 0.0, out.grad))
+            self._accum(_unbroadcast(np.where(mask, 0.0, out.grad), self.data.shape))
 
         out._backward = backward if out.requires_grad else None
         return out

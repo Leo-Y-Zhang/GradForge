@@ -136,3 +136,16 @@ def test_masked_fill():
     mask = np.random.default_rng(5).random((4, 4)) < 0.4
     c = const(rng, (4, 4))
     gradcheck(lambda: (a.masked_fill(mask, -3.0) * c).sum(), [a], tol=TOL)
+
+
+def test_masked_fill_with_a_mask_wider_than_the_tensor():
+    # np.where broadcasts the tensor up to the mask's shape, so the output is
+    # bigger than the input and the gradient has to be summed back down, like
+    # every other broadcasting op. Returned unsummed, a (3,) leaf ends up
+    # holding a (2, 3) gradient, which an optimizer then fails to apply.
+    rng = np.random.default_rng(25)
+    a = randt(rng, (3,))
+    mask = np.array([[True, False, False], [False, False, True]])
+    c = const(rng, (2, 3))
+    gradcheck(lambda: (a.masked_fill(mask, 5.0) * c).sum(), [a], tol=TOL)
+    assert a.grad.shape == a.shape
