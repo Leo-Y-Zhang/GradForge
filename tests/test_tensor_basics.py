@@ -62,3 +62,21 @@ def test_broadcast_shapes():
     assert a.grad.shape == (2, 3, 4)
     assert b.grad.shape == (3, 1)
     assert np.allclose(b.grad, 8.0)  # 2*4 broadcast copies each
+
+
+def test_ndarray_on_the_left_defers_to_tensor():
+    # Without Tensor opting out of numpy's ufunc machinery, `ndarray * Tensor`
+    # never reaches Tensor.__rmul__: numpy broadcasts the Tensor as an opaque
+    # object and returns an object array of per-element Tensors, detached from
+    # any graph. No error is raised until something much later fails.
+    x = Tensor([1.0, 2.0, 3.0], requires_grad=True)
+    w = np.array([2.0, -1.0, 0.5])
+    for out in (w * x, w + x, w - x, w / x):
+        assert isinstance(out, Tensor)
+        assert out.shape == (3,)
+    x.grad = None
+    (w * x).sum().backward()
+    assert np.allclose(x.grad, w)
+    x.grad = None
+    (w / x).sum().backward()
+    assert np.allclose(x.grad, -w / x.data ** 2)
