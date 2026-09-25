@@ -39,6 +39,12 @@ def gradcheck(fn, wrt, h: float = 1e-5, tol: float = 1e-6,
     for p in wrt:
         if p.grad is None:
             raise AssertionError("no gradient reached a checked tensor")
+        # Elements are compared by flat index, so a gradient of the wrong shape
+        # would be read as if it were the right one -- and passes whenever its
+        # leading entries happen to hold the right numbers.
+        if p.grad.shape != p.data.shape:
+            raise AssertionError(
+                f"gradient has shape {p.grad.shape}, tensor has {p.data.shape}")
         analytic.append(p.grad.copy())
 
     max_rel = 0.0
