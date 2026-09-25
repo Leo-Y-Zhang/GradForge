@@ -43,6 +43,11 @@ def _is_basic_index(idx) -> bool:
 class Tensor:
     __slots__ = ("data", "grad", "requires_grad", "_backward", "_prev")
 
+    # Opt out of numpy's ufunc dispatch, so `ndarray * Tensor` returns
+    # NotImplemented and Python falls through to Tensor.__rmul__, instead of
+    # numpy building an object array of detached per-element Tensors.
+    __array_ufunc__ = None
+
     def __init__(self, data, requires_grad: bool = False):
         if isinstance(data, Tensor):
             data = data.data
