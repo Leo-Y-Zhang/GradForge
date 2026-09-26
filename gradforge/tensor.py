@@ -261,8 +261,15 @@ class Tensor:
 
     def mean(self, axis=None, keepdims=False):
         s = self.sum(axis=axis, keepdims=keepdims)
-        n = self.data.size // max(s.data.size, 1)
-        return s * (1.0 / n)
+        # Count the reduced elements from the shape: size // s.size breaks
+        # when either side is empty, e.g. (3, 0) averaged over axis 0.
+        if axis is None:
+            n = self.data.size
+        else:
+            axes = axis if isinstance(axis, tuple) else (axis,)
+            n = int(np.prod([self.data.shape[a] for a in axes]))
+        # An empty reduction has no mean; numpy gives NaN there, not an error.
+        return s * (1.0 / n if n else np.nan)
 
     # ------------------------------------------------------------------ shape
 

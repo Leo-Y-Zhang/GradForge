@@ -173,3 +173,17 @@ def test_pow_zero_exponent_at_zero():
     c = Tensor(np.array([0.3, -1.1, 0.7]))
     gradcheck(lambda: ((x ** 0) * c).sum(), [x], tol=TOL)
     assert np.array_equal(x.grad, np.zeros(3))
+
+
+def test_mean_over_zero_size_shapes():
+    # The count of averaged elements has to come from the reduced axes. A
+    # (3, 0) tensor averaged over axis 0 is an empty result, not an error,
+    # and averaging over an empty axis gives NaN as numpy does.
+    x = Tensor(np.zeros((3, 0)), requires_grad=True)
+    m = x.mean(axis=0)
+    assert m.shape == (0,)
+    m.sum().backward()
+    assert x.grad.shape == (3, 0)
+    got = Tensor(np.zeros((0, 3))).mean(axis=0).data
+    assert got.shape == (3,) and np.isnan(got).all()
+    assert np.isnan(Tensor(np.zeros((0,))).mean().data)
