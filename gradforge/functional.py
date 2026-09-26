@@ -47,6 +47,14 @@ def cross_entropy(logits: Tensor, targets) -> Tensor:
     Accepts (N, V) logits with (N,) targets, or (B, T, V) with (B, T).
     """
     targets = np.asarray(targets)
+    # Checked here because a mismatch does not fail by itself: the indexing
+    # below still picks one entry per target and returns a plausible loss.
+    if logits.ndim not in (2, 3) or targets.shape != logits.shape[:-1]:
+        raise ValueError(f"logits of shape {logits.shape} need targets of "
+                         f"shape {logits.shape[:-1]}, got {targets.shape}")
+    v = logits.shape[-1]
+    if targets.size and (targets.min() < 0 or targets.max() >= v):
+        raise ValueError(f"targets must be class indices in [0, {v})")
     if logits.ndim == 3:
         b, t, v = logits.shape
         logits = logits.reshape(b * t, v)

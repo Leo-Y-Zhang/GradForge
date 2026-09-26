@@ -1,5 +1,6 @@
 """Gradient checks and numerical-stability proofs for the composed functions."""
 import numpy as np
+import pytest
 
 from gradforge.functional import cross_entropy, gelu, log_softmax, softmax
 from gradforge.gradcheck import gradcheck
@@ -46,6 +47,21 @@ def test_cross_entropy_known_values():
     expected = -(3.0 - np.log(np.exp(logits).sum()))
     got = float(cross_entropy(Tensor(logits), [2]).data)
     assert np.isclose(got, expected)
+
+
+def test_cross_entropy_refuses_targets_that_do_not_fit_the_logits():
+    # Indexing picks one log-probability per target, so a mismatched call
+    # does not fail by itself: it returns a finite, plausible loss. Too few
+    # targets average over the first rows only, a column of targets
+    # broadcasts to every (row, target) pair, targets laid out (T, B) for
+    # (B, T) logits pair each position with another's target, and a negative
+    # target quietly reads a class from the end of the row.
+    x = Tensor(np.zeros((4, 3)))
+    for bad in ([0, 1], [[0], [1], [2], [0]], [0, 1, 2, -1]):
+        with pytest.raises(ValueError):
+            cross_entropy(x, bad)
+    with pytest.raises(ValueError):
+        cross_entropy(Tensor(np.zeros((2, 3, 5))), np.zeros((3, 2), dtype=int))
 
 
 def test_softmax_rows_sum_to_one():
