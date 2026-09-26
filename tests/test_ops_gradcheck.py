@@ -164,3 +164,12 @@ def test_transpose_with_negative_axes():
     b = randt(rng, (2, 3, 4, 5))
     c2 = const(rng, (5, 2, 4, 3))
     gradcheck(lambda: (b.transpose(-1, 0, 2, -3) * c2).sum(), [b], tol=TOL)
+
+
+def test_pow_zero_exponent_at_zero():
+    # x ** 0 is the constant 1, so its derivative is 0 everywhere, zero
+    # included. The general rule p * x ** (p - 1) evaluates 0 * inf there.
+    x = Tensor(np.array([0.0, 1.5, -2.0]), requires_grad=True)
+    c = Tensor(np.array([0.3, -1.1, 0.7]))
+    gradcheck(lambda: ((x ** 0) * c).sum(), [x], tol=TOL)
+    assert np.array_equal(x.grad, np.zeros(3))

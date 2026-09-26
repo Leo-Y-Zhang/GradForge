@@ -177,7 +177,12 @@ class Tensor:
         out = self._make(self.data ** p, (self,), None)
 
         def backward():
-            self._accum(out.grad * p * self.data ** (p - 1))
+            if p == 0:
+                # x ** 0 is constant. The general rule would evaluate
+                # 0 * x ** -1, which is 0 * inf = NaN wherever x is 0.
+                self._accum(np.zeros_like(self.data))
+            else:
+                self._accum(out.grad * p * self.data ** (p - 1))
 
         out._backward = backward if out.requires_grad else None
         return out
