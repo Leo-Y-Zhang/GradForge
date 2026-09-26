@@ -318,6 +318,10 @@ class Tensor:
         return out
 
     def masked_fill(self, mask, value: float):
+        # A Tensor is an opaque object to numpy, which would read the whole
+        # of it as one truthy scalar and fill every element.
+        if isinstance(mask, Tensor):
+            mask = mask.data
         mask = np.asarray(mask, dtype=bool)
         out = self._make(np.where(mask, value, self.data), (self,), None)
 
