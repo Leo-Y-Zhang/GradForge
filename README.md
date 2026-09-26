@@ -96,7 +96,7 @@ gradforge/__main__.py    the gradforge command: gradcheck, train, sample, bench
 gradforge/data.py        char codec + batching over the bundled excerpt
 gradforge/train.py       bounded demo training (python -m gradforge.train)
 gradforge/sample.py      text generation      (python -m gradforge.sample)
-tests/                   the proof obligations (55 tests)
+tests/                   the proof obligations (57 tests)
 docs/DESIGN.md           architecture and the measured numpy decision
 ```
 
@@ -116,9 +116,9 @@ memory management, operator fusion, a stable public API, and years of edge
 cases. This has none of that: float64 on CPU, basic-plus-integer-array
 indexing only, scalar exponents only, and a Tensor API just big enough for
 the model it trains. The point is a complete, verified core that one person
-can read end to end: 314 lines for the engine, 57 for the composed math,
+can read end to end: 316 lines for the engine, 65 for the composed math,
 161 for the layers, 65 for the optimizers, 81 for the gradient checker --
-678 lines of source for a working, gradient-checked transformer.
+688 lines of source for a working, gradient-checked transformer.
 
 ## License
 
