@@ -43,7 +43,7 @@ gradforge bench          # the matmul throughput quoted above, on your machine
 
 Measured on the development machine, worst relative error `2.0e-08` across
 eighteen primitive checks and the full GPT loss — the primitives land between
-`1e-12` and `1e-10`, and the end-to-end check is looser only because it samples
+`8e-13` and `1.4e-10`, and the end-to-end check is looser only because it samples
 parameters rather than sweeping thousands of forward passes.
 
 Each key test was watched failing first: break the op (flip a sign in matmul's
