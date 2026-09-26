@@ -29,3 +29,22 @@ def test_gradcheck_command_exits_nonzero_on_a_wrong_gradient(monkeypatch, capsys
     assert main(["gradcheck", "--skip-model"]) == 1
     out = capsys.readouterr().out
     assert "tanh" in out and "FAILED" in out
+
+
+def test_gradcheck_command_checks_relu_on_both_sides_of_the_kink(monkeypatch, capsys):
+    # relu checked only on positive inputs exercises the identity half, and
+    # the model uses gelu, so a backward that never zeroes negative inputs
+    # would pass the whole command.
+    def relu_that_never_zeroes(self):
+        out = self._make(np.maximum(self.data, 0.0), (self,), None)
+
+        def backward():
+            self._accum(out.grad)
+
+        out._backward = backward if out.requires_grad else None
+        return out
+
+    monkeypatch.setattr(Tensor, "relu", relu_that_never_zeroes)
+    assert main(["gradcheck", "--skip-model"]) == 1
+    out = capsys.readouterr().out
+    assert "relu" in out and "FAILED" in out
