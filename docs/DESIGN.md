@@ -112,8 +112,10 @@ the red output, and the fix are recorded in the repo history / PR notes).
 
 1. Gradient checks, ops: central difference vs autograd for every primitive
    op, seeded inputs, relative error < 1e-6 (float64, h=1e-5). Includes the
-   nasty cases: broadcasting in both operands, batched matmul, duplicate
-   fancy indices, masked positions, negative transpose axes.
+   nasty cases: broadcasting in both operands, reductions over negative
+   and tuple axes, batched matmul, duplicate fancy indices, masked
+   positions, negative transpose axes, one node feeding several consumers,
+   tensors built on non-contiguous views, and zero-length axes.
 2. Gradient checks, layers: Linear, LayerNorm, Embedding, attention, MLP,
    Block, and a miniature end-to-end GPT loss (sampled elements for the
    larger tensors, seeded).
@@ -126,14 +128,18 @@ the red output, and the fix are recorded in the repo history / PR notes).
    trace.
 6. Stability: softmax/log-softmax/cross-entropy finite and correct at
    logits of +-1e4, softmax rows sum to 1, cross-entropy matches an
-   analytically computed value on a small known case.
+   analytically computed value on a small known case, `-inf` logits get
+   zero gradient, saturated tanh and underflowing exp stay finite, and
+   division by small denominators matches the closed form.
 7. The checker checked: gradcheck must reject a derivative off by one part
-   in 10^4 and a gradient of the wrong shape, and `gradforge gradcheck` must
-   exit non-zero when an op's backward is broken.
+   in 10^4, a gradient of the wrong shape and a NaN or infinite gradient,
+   and `gradforge gradcheck` must exit non-zero when an op's backward is
+   broken.
 8. What gradient checks cannot see: attention and LayerNorm forward values
    against plain numpy, the one-character shift between inputs and targets,
-   an exact checkpoint save/load round trip, and cross-entropy refusing
-   targets that do not fit its logits.
+   an exact checkpoint save/load round trip, cross-entropy refusing
+   targets that do not fit its logits or are not integers, and every input
+   dtype ending up float64.
 
 ## Failure modes and rollback
 
