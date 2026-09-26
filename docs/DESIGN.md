@@ -113,7 +113,7 @@ the red output, and the fix are recorded in the repo history / PR notes).
 1. Gradient checks, ops: central difference vs autograd for every primitive
    op, seeded inputs, relative error < 1e-6 (float64, h=1e-5). Includes the
    nasty cases: broadcasting in both operands, batched matmul, duplicate
-   fancy indices, masked positions.
+   fancy indices, masked positions, negative transpose axes.
 2. Gradient checks, layers: Linear, LayerNorm, Embedding, attention, MLP,
    Block, and a miniature end-to-end GPT loss (sampled elements for the
    larger tensors, seeded).
@@ -132,7 +132,8 @@ the red output, and the fix are recorded in the repo history / PR notes).
    exit non-zero when an op's backward is broken.
 8. What gradient checks cannot see: attention and LayerNorm forward values
    against plain numpy, the one-character shift between inputs and targets,
-   and an exact checkpoint save/load round trip.
+   an exact checkpoint save/load round trip, and cross-entropy refusing
+   targets that do not fit its logits.
 
 ## Failure modes and rollback
 
