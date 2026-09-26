@@ -277,7 +277,9 @@ class Tensor:
             axes = tuple(axes[0])
         perm = axes if axes else tuple(range(self.data.ndim))[::-1]
         out = self._make(self.data.transpose(perm), (self,), None)
-        inv = tuple(np.argsort(perm))
+        # numpy has validated perm; normalise negative axes before inverting
+        # it, or argsort puts -1 before 0 and backward permutes wrongly.
+        inv = tuple(np.argsort([ax % self.data.ndim for ax in perm]))
 
         def backward():
             self._accum(out.grad.transpose(inv))

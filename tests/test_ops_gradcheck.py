@@ -149,3 +149,18 @@ def test_masked_fill_with_a_mask_wider_than_the_tensor():
     c = const(rng, (2, 3))
     gradcheck(lambda: (a.masked_fill(mask, 5.0) * c).sum(), [a], tol=TOL)
     assert a.grad.shape == a.shape
+
+
+def test_transpose_with_negative_axes():
+    # numpy's transpose accepts negative axes, and so does the forward pass.
+    # The backward pass has to invert the permutation over the normalised
+    # axes: argsort of the raw ones orders -1 before 0 and hands back a
+    # wrongly permuted gradient. On a cube it even has the right shape, so
+    # only the values give it away.
+    rng = np.random.default_rng(26)
+    a = randt(rng, (3, 3, 3))
+    c = const(rng, (3, 3, 3))
+    gradcheck(lambda: (a.transpose(0, -1, -2) * c).sum(), [a], tol=TOL)
+    b = randt(rng, (2, 3, 4, 5))
+    c2 = const(rng, (5, 2, 4, 3))
+    gradcheck(lambda: (b.transpose(-1, 0, 2, -3) * c2).sum(), [b], tol=TOL)
