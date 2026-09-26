@@ -187,3 +187,15 @@ def test_mean_over_zero_size_shapes():
     got = Tensor(np.zeros((0, 3))).mean(axis=0).data
     assert got.shape == (3,) and np.isnan(got).all()
     assert np.isnan(Tensor(np.zeros((0,))).mean().data)
+
+
+def test_masked_fill_accepts_a_tensor_mask():
+    # numpy sees a Tensor as one opaque object, and converting that to bool
+    # gives a single True: every element was filled, with no error.
+    rng = np.random.default_rng(27)
+    a = randt(rng, (2, 3))
+    mask = np.array([[True, False, False], [False, True, False]])
+    got = a.masked_fill(Tensor(mask), -3.0)
+    assert np.array_equal(got.data, np.where(mask, -3.0, a.data))
+    c = const(rng, (2, 3))
+    gradcheck(lambda: (a.masked_fill(Tensor(mask), -3.0) * c).sum(), [a], tol=TOL)
