@@ -64,6 +64,17 @@ def test_cross_entropy_refuses_targets_that_do_not_fit_the_logits():
         cross_entropy(Tensor(np.zeros((2, 3, 5))), np.zeros((3, 2), dtype=int))
 
 
+def test_cross_entropy_refuses_targets_that_are_not_integers():
+    # Boolean targets pass the shape and range checks, and the indexing then
+    # reads them as a mask: here both rows scored class 0, a loss of about
+    # 2.5, instead of the classes 1 and 0 they name at a loss of about 0.007.
+    x = Tensor(np.array([[0.0, 5.0], [5.0, 0.0]]))
+    for bad in (np.array([True, False]), np.array([1.0, 0.0])):
+        with pytest.raises(ValueError, match="integers"):
+            cross_entropy(x, bad)
+    assert float(cross_entropy(x, np.array([1, 0])).data) < 0.01
+
+
 def test_softmax_rows_sum_to_one():
     rng = np.random.default_rng(34)
     x = Tensor(rng.normal(size=(4, 7)) * 3.0)

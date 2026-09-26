@@ -52,6 +52,10 @@ def cross_entropy(logits: Tensor, targets) -> Tensor:
     if logits.ndim not in (2, 3) or targets.shape != logits.shape[:-1]:
         raise ValueError(f"logits of shape {logits.shape} need targets of "
                          f"shape {logits.shape[:-1]}, got {targets.shape}")
+    # Booleans or floats are not class indices; boolean ones would even be
+    # read as a mask by the indexing below and pick the wrong entries.
+    if targets.size and not np.issubdtype(targets.dtype, np.integer):
+        raise ValueError(f"targets must be integers, got dtype {targets.dtype}")
     v = logits.shape[-1]
     if targets.size and (targets.min() < 0 or targets.max() >= v):
         raise ValueError(f"targets must be class indices in [0, {v})")
