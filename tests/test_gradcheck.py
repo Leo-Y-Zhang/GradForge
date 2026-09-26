@@ -73,3 +73,23 @@ def test_gradcheck_refuses_a_gradient_of_the_wrong_shape():
 
     with pytest.raises(AssertionError, match="shape"):
         gradcheck(fn, [x], tol=TOL)
+
+
+@pytest.mark.parametrize("bad", [np.nan, np.inf])
+def test_gradcheck_rejects_a_non_finite_gradient(bad):
+    # NaN compares false with everything, so a check written as
+    # `error >= tol` lets a NaN gradient through as a pass -- and an infinite
+    # one too, since inf/inf is NaN. The loss here is finite everywhere.
+    x = Tensor(np.array([0.5, -1.0, 2.0]), requires_grad=True)
+
+    def fn():
+        out = x * 1.0
+
+        def backward():
+            x._accum(out.grad * bad)
+
+        out._backward = backward
+        return out.sum()
+
+    with pytest.raises(AssertionError, match="gradcheck failed"):
+        gradcheck(fn, [x], tol=TOL)

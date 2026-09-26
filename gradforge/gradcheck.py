@@ -72,10 +72,13 @@ def gradcheck(fn, wrt, h: float = 1e-5, tol: float = 1e-6,
             num = (fp - fm) / (2.0 * h)
             a = float(ana_flat[i])
             rel = abs(num - a) / max(1.0, abs(num), abs(a))
-            max_rel = max(max_rel, rel)
-            if rel >= tol:
+            # NaN compares false with everything, so `rel >= tol` would wave
+            # through a NaN or infinite gradient (inf - inf is NaN too). Only
+            # a finite error below tolerance counts as agreement.
+            if not rel < tol:
                 raise AssertionError(
                     f"gradcheck failed at element {i}: "
                     f"analytic {a:.10g} vs numeric {num:.10g} (rel {rel:.3g})"
                 )
+            max_rel = max(max_rel, rel)
     return max_rel
