@@ -136,3 +136,66 @@ def test_masked_fill():
     mask = np.random.default_rng(5).random((4, 4)) < 0.4
     c = const(rng, (4, 4))
     gradcheck(lambda: (a.masked_fill(mask, -3.0) * c).sum(), [a], tol=TOL)
+
+
+def test_masked_fill_with_a_mask_wider_than_the_tensor():
+    # np.where broadcasts the tensor up to the mask's shape, so the output is
+    # bigger than the input and the gradient has to be summed back down, like
+    # every other broadcasting op. Returned unsummed, a (3,) leaf ends up
+    # holding a (2, 3) gradient, which an optimizer then fails to apply.
+    rng = np.random.default_rng(25)
+    a = randt(rng, (3,))
+    mask = np.array([[True, False, False], [False, False, True]])
+    c = const(rng, (2, 3))
+    gradcheck(lambda: (a.masked_fill(mask, 5.0) * c).sum(), [a], tol=TOL)
+    assert a.grad.shape == a.shape
+
+
+def test_transpose_with_negative_axes():
+    # numpy's transpose accepts negative axes, and so does the forward pass.
+    # The backward pass has to invert the permutation over the normalised
+    # axes: argsort of the raw ones orders -1 before 0 and hands back a
+    # wrongly permuted gradient. On a cube it even has the right shape, so
+    # only the values give it away.
+    rng = np.random.default_rng(26)
+    a = randt(rng, (3, 3, 3))
+    c = const(rng, (3, 3, 3))
+    gradcheck(lambda: (a.transpose(0, -1, -2) * c).sum(), [a], tol=TOL)
+    b = randt(rng, (2, 3, 4, 5))
+    c2 = const(rng, (5, 2, 4, 3))
+    gradcheck(lambda: (b.transpose(-1, 0, 2, -3) * c2).sum(), [b], tol=TOL)
+
+
+def test_pow_zero_exponent_at_zero():
+    # x ** 0 is the constant 1, so its derivative is 0 everywhere, zero
+    # included. The general rule p * x ** (p - 1) evaluates 0 * inf there.
+    x = Tensor(np.array([0.0, 1.5, -2.0]), requires_grad=True)
+    c = Tensor(np.array([0.3, -1.1, 0.7]))
+    gradcheck(lambda: ((x ** 0) * c).sum(), [x], tol=TOL)
+    assert np.array_equal(x.grad, np.zeros(3))
+
+
+def test_mean_over_zero_size_shapes():
+    # The count of averaged elements has to come from the reduced axes. A
+    # (3, 0) tensor averaged over axis 0 is an empty result, not an error,
+    # and averaging over an empty axis gives NaN as numpy does.
+    x = Tensor(np.zeros((3, 0)), requires_grad=True)
+    m = x.mean(axis=0)
+    assert m.shape == (0,)
+    m.sum().backward()
+    assert x.grad.shape == (3, 0)
+    got = Tensor(np.zeros((0, 3))).mean(axis=0).data
+    assert got.shape == (3,) and np.isnan(got).all()
+    assert np.isnan(Tensor(np.zeros((0,))).mean().data)
+
+
+def test_masked_fill_accepts_a_tensor_mask():
+    # numpy sees a Tensor as one opaque object, and converting that to bool
+    # gives a single True: every element was filled, with no error.
+    rng = np.random.default_rng(27)
+    a = randt(rng, (2, 3))
+    mask = np.array([[True, False, False], [False, True, False]])
+    got = a.masked_fill(Tensor(mask), -3.0)
+    assert np.array_equal(got.data, np.where(mask, -3.0, a.data))
+    c = const(rng, (2, 3))
+    gradcheck(lambda: (a.masked_fill(Tensor(mask), -3.0) * c).sum(), [a], tol=TOL)

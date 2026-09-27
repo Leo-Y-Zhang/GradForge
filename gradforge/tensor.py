@@ -43,6 +43,11 @@ def _is_basic_index(idx) -> bool:
 class Tensor:
     __slots__ = ("data", "grad", "requires_grad", "_backward", "_prev")
 
+    # Opt out of numpy's ufunc dispatch, so `ndarray * Tensor` returns
+    # NotImplemented and Python falls through to Tensor.__rmul__, instead of
+    # numpy building an object array of detached per-element Tensors.
+    __array_ufunc__ = None
+
     def __init__(self, data, requires_grad: bool = False):
         if isinstance(data, Tensor):
             data = data.data
@@ -172,7 +177,12 @@ class Tensor:
         out = self._make(self.data ** p, (self,), None)
 
         def backward():
-            self._accum(out.grad * p * self.data ** (p - 1))
+            if p == 0:
+                # x ** 0 is constant. The general rule would evaluate
+                # 0 * x ** -1, which is 0 * inf = NaN wherever x is 0.
+                self._accum(np.zeros_like(self.data))
+            else:
+                self._accum(out.grad * p * self.data ** (p - 1))
 
         out._backward = backward if out.requires_grad else None
         return out
@@ -251,8 +261,15 @@ class Tensor:
 
     def mean(self, axis=None, keepdims=False):
         s = self.sum(axis=axis, keepdims=keepdims)
-        n = self.data.size // max(s.data.size, 1)
-        return s * (1.0 / n)
+        # Count the reduced elements from the shape: size // s.size breaks
+        # when either side is empty, e.g. (3, 0) averaged over axis 0.
+        if axis is None:
+            n = self.data.size
+        else:
+            axes = axis if isinstance(axis, tuple) else (axis,)
+            n = int(np.prod([self.data.shape[a] for a in axes]))
+        # An empty reduction has no mean; numpy gives NaN there, not an error.
+        return s * (1.0 / n if n else np.nan)
 
     # ------------------------------------------------------------------ shape
 
@@ -272,7 +289,9 @@ class Tensor:
             axes = tuple(axes[0])
         perm = axes if axes else tuple(range(self.data.ndim))[::-1]
         out = self._make(self.data.transpose(perm), (self,), None)
-        inv = tuple(np.argsort(perm))
+        # numpy has validated perm; normalise negative axes before inverting
+        # it, or argsort puts -1 before 0 and backward permutes wrongly.
+        inv = tuple(np.argsort([ax % self.data.ndim for ax in perm]))
 
         def backward():
             self._accum(out.grad.transpose(inv))
@@ -299,11 +318,15 @@ class Tensor:
         return out
 
     def masked_fill(self, mask, value: float):
+        # A Tensor is an opaque object to numpy, which would read the whole
+        # of it as one truthy scalar and fill every element.
+        if isinstance(mask, Tensor):
+            mask = mask.data
         mask = np.asarray(mask, dtype=bool)
         out = self._make(np.where(mask, value, self.data), (self,), None)
 
         def backward():
-            self._accum(np.where(mask, 0.0, out.grad))
+            self._accum(_unbroadcast(np.where(mask, 0.0, out.grad), self.data.shape))
 
         out._backward = backward if out.requires_grad else None
         return out

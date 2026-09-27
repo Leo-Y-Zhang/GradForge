@@ -7,8 +7,9 @@ The only runtime dependency is numpy, used strictly as array arithmetic --
 every derivative rule is hand-written and every one of them is verified
 against central-difference numerical differentiation. (Why numpy at all?
 Nested-list tensors were measured at 62.6 Mflop/s on the development machine
-versus numpy's 15.1 Gflop/s; training the demo model would take eleven hours
-instead of two minutes. The measurement is in [docs/DESIGN.md](docs/DESIGN.md).)
+versus numpy's 15.1 Gflop/s; training the demo model would take about four and
+a half hours instead of three minutes. The measurement is in
+[docs/DESIGN.md](docs/DESIGN.md).)
 
 ## What proves what
 
@@ -16,10 +17,10 @@ Frameworks ask you to trust `.backward()`. This repo doesn't ask:
 
 | Claim | Proof |
 |---|---|
-| Every op's gradient is correct | Central-difference check on each primitive op (rel. tol 1e-6, float64), including broadcast operands, batched matmul, duplicate fancy indices |
+| Every op's gradient is correct | Central-difference check on each primitive op (rel. tol 1e-6, float64), including broadcast operands reduced over negative axes, batched matmul, duplicate fancy indices, reused nodes, non-contiguous views and zero-size axes |
 | Every layer's gradient is correct | Same check through Linear, LayerNorm, Embedding (with repeated tokens), causal self-attention, MLP, a full block, and the whole GPT end to end |
 | Attention is actually causal | Perturb the last position, assert earlier outputs are bit-unchanged |
-| Softmax/cross-entropy are stable | Logits of +-1e4 must give finite outputs and finite gradients; the test also shows the naive formula overflowing there |
+| Softmax/cross-entropy are stable | Logits of +-1e4 must give finite outputs and finite gradients (log-softmax's matches its closed form); the test also shows the naive formula overflowing there; `-inf` logits get exactly zero gradient |
 | Training is deterministic | Same seed, two independent runs, exact float equality of every loss value |
 | The gradients can actually learn | A 1-layer GPT must memorize a fixed batch to loss < 0.1 |
 | Adam is implemented right | Solves a seeded regression to its known optimum; a separate test pins the bias-corrected first-step size, which uncorrected Adam fails |
@@ -35,15 +36,15 @@ central-difference estimate, and exits non-zero if any of them disagrees:
 pip install -e .
 
 gradforge gradcheck      # every gradient, numerically verified
-gradforge train          # train the demo GPT; loss falls from ~4.6
+gradforge train          # train the demo GPT; loss falls from ~4.9
 gradforge sample         # generate from the checkpoint
 gradforge bench          # the matmul throughput quoted above, on your machine
 ```
 
 Measured on the development machine, worst relative error `2.0e-08` across
-fourteen primitives and the full GPT loss — the primitives land near `1e-11`,
-and the end-to-end check is looser only because it samples parameters rather
-than sweeping thousands of forward passes.
+eighteen primitive checks and the full GPT loss — the primitives land between
+`8e-13` and `1.4e-10`, and the end-to-end check is looser only because it samples
+parameters rather than sweeping thousands of forward passes.
 
 Each key test was watched failing first: break the op (flip a sign in matmul's
 backward, swap scatter-add for assignment, drop the softmax shift, remove the
@@ -55,7 +56,7 @@ never failed is decoration.
 A character-level GPT (2 layers, 4 heads, d_model 64, block size 64, ~113k
 parameters) trained for 1500 Adam steps on a bundled 47 KB public-domain
 excerpt of *Alice's Adventures in Wonderland* (Project Gutenberg ebook #11).
-Training takes about two minutes on an ordinary CPU:
+Training takes about three minutes on an ordinary CPU:
 
 ```
 python -m gradforge.train --steps 1500 --out gradforge_model.npz
@@ -91,10 +92,11 @@ gradforge/functional.py  softmax, log_softmax, gelu, cross_entropy (composed)
 gradforge/nn.py          Linear, LayerNorm, Embedding, attention, MLP, GPT
 gradforge/optim.py       SGD with momentum, Adam
 gradforge/gradcheck.py   the central-difference checker the tests are built on
+gradforge/__main__.py    the gradforge command: gradcheck, train, sample, bench
 gradforge/data.py        char codec + batching over the bundled excerpt
 gradforge/train.py       bounded demo training (python -m gradforge.train)
 gradforge/sample.py      text generation      (python -m gradforge.sample)
-tests/                   the proof obligations (44 tests)
+tests/                   the proof obligations (78 tests)
 docs/DESIGN.md           architecture and the measured numpy decision
 ```
 
@@ -114,9 +116,9 @@ memory management, operator fusion, a stable public API, and years of edge
 cases. This has none of that: float64 on CPU, basic-plus-integer-array
 indexing only, scalar exponents only, and a Tensor API just big enough for
 the model it trains. The point is a complete, verified core that one person
-can read end to end: 309 lines for the engine, 57 for the composed math,
-161 for the layers, 62 for the optimizers, 75 for the gradient checker --
-664 lines of source for a working, gradient-checked transformer.
+can read end to end: 332 lines for the engine, 69 for the composed math,
+161 for the layers, 65 for the optimizers, 84 for the gradient checker --
+711 lines of source for a working, gradient-checked transformer.
 
 ## License
 

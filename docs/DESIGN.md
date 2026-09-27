@@ -36,10 +36,13 @@ Extrapolating to the demo GPT (~200k params, batch 16 x block 64, fwd+bwd
 ```
 
 Eleven hours versus three minutes. Pure Python cannot train the demo in
-reasonable time, so numpy is the single runtime dependency. The autograd
-logic itself -- graph construction, topological sort, every backward rule --
-is still written from scratch; numpy is used only as the array arithmetic
-substrate, never `numpy.gradient` or any autodiff shortcut.
+reasonable time, so numpy is the single runtime dependency. (That estimate was
+made for the planned configuration. The demo as shipped is smaller -- 112,640
+parameters, 1500 steps -- which puts the same pure-Python estimate at about
+4.6 hours, against a measured 172 seconds with numpy; the conclusion stands.)
+The autograd logic itself -- graph construction, topological sort, every
+backward rule -- is still written from scratch; numpy is used only as the
+array arithmetic substrate, never `numpy.gradient` or any autodiff shortcut.
 
 All tensors are float64. That costs ~2x speed versus float32 but makes
 central-difference gradient checks sharp (relative errors around 1e-9 instead
@@ -55,6 +58,7 @@ gradforge/
                  MLP, Block, GPT
   optim.py       SGD (with momentum), Adam
   gradcheck.py   central-difference checker used by the test suite
+  __main__.py    the gradforge command: gradcheck, train, sample, bench
   data.py        char codec + batch sampling over the bundled excerpt
   train.py       python -m gradforge.train  (bounded demo training)
   sample.py      python -m gradforge.sample (generate text from a checkpoint)
@@ -108,12 +112,14 @@ the red output, and the fix are recorded in the repo history / PR notes).
 
 1. Gradient checks, ops: central difference vs autograd for every primitive
    op, seeded inputs, relative error < 1e-6 (float64, h=1e-5). Includes the
-   nasty cases: broadcasting in both operands, batched matmul, duplicate
-   fancy indices, masked positions.
+   nasty cases: broadcasting in both operands, reductions over negative
+   and tuple axes, batched matmul, duplicate fancy indices, masked
+   positions, negative transpose axes, one node feeding several consumers,
+   tensors built on non-contiguous views, and zero-length axes.
 2. Gradient checks, layers: Linear, LayerNorm, Embedding, attention, MLP,
    Block, and a miniature end-to-end GPT loss (sampled elements for the
    larger tensors, seeded).
-3. Determinism: same seed => two independent 20-step training runs produce
+3. Determinism: same seed => two independent 15-step training runs produce
    bit-identical loss sequences (exact float equality, not approx).
 4. Overfit: a 1-layer model memorizes a tiny fixed batch to loss < 0.1.
    If gradients or the optimizer are subtly wrong, this is where it shows.
@@ -122,7 +128,18 @@ the red output, and the fix are recorded in the repo history / PR notes).
    trace.
 6. Stability: softmax/log-softmax/cross-entropy finite and correct at
    logits of +-1e4, softmax rows sum to 1, cross-entropy matches an
-   analytically computed value on a small known case.
+   analytically computed value on a small known case, `-inf` logits get
+   zero gradient, saturated tanh and underflowing exp stay finite, and
+   division by small denominators matches the closed form.
+7. The checker checked: gradcheck must reject a derivative off by one part
+   in 10^4, a gradient of the wrong shape and a NaN or infinite gradient,
+   and `gradforge gradcheck` must exit non-zero when an op's backward is
+   broken.
+8. What gradient checks cannot see: attention and LayerNorm forward values
+   against plain numpy, the one-character shift between inputs and targets,
+   an exact checkpoint save/load round trip, cross-entropy refusing
+   targets that do not fit its logits or are not integers, and every input
+   dtype ending up float64.
 
 ## Failure modes and rollback
 

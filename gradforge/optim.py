@@ -39,17 +39,20 @@ class Adam:
         self.lr = lr
         self.b1, self.b2 = betas
         self.eps = eps
-        self.t = 0
+        # Per parameter: step() skips a parameter with no grad, so its moment
+        # estimates may have seen fewer updates than the optimizer has run,
+        # and bias correction must use the count they actually saw.
+        self.t = [0] * len(self.params)
         self.m = [np.zeros_like(p.data) for p in self.params]
         self.v = [np.zeros_like(p.data) for p in self.params]
 
     def step(self) -> None:
-        self.t += 1
-        bc1 = 1.0 - self.b1 ** self.t
-        bc2 = 1.0 - self.b2 ** self.t
-        for p, m, v in zip(self.params, self.m, self.v):
+        for i, (p, m, v) in enumerate(zip(self.params, self.m, self.v)):
             if p.grad is None:
                 continue
+            self.t[i] += 1
+            bc1 = 1.0 - self.b1 ** self.t[i]
+            bc2 = 1.0 - self.b2 ** self.t[i]
             g = p.grad
             m *= self.b1
             m += (1.0 - self.b1) * g
