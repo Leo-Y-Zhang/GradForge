@@ -56,3 +56,21 @@ def test_adam_first_step_is_lr_sized():
     loss.backward()
     opt.step()
     assert np.isclose(p.data[0], -0.01, rtol=1e-3)
+
+
+def test_adam_bias_correction_counts_each_parameters_own_steps():
+    # step() skips a parameter whose grad is None, so a parameter can join
+    # training late. Its moment estimates then hold one update, and bias
+    # correction has to divide by 1 - beta^1, not by 1 - beta^t for however
+    # many steps the others have taken -- otherwise its first move is about
+    # 0.74 lr here instead of lr.
+    p = Tensor([0.0], requires_grad=True)
+    q = Tensor([0.0], requires_grad=True)
+    opt = Adam([p, q], lr=0.01)
+    (p * 3.0).sum().backward()          # step 1: q takes no part
+    opt.step()
+    assert q.data[0] == 0.0
+    opt.zero_grad()
+    (p * 3.0 + q * 5.0).sum().backward()
+    opt.step()
+    assert np.isclose(q.data[0], -0.01, rtol=1e-3)
