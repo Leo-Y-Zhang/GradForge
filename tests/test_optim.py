@@ -18,7 +18,7 @@ def test_sgd_momentum_matches_hand_computed_trace():
         opt.zero_grad()
         loss.backward()
         opt.step()
-        assert np.allclose(p.data, [expected], atol=1e-12)
+        assert np.allclose(p.data, [expected], rtol=0, atol=1e-12)
 
 
 def test_adam_solves_seeded_regression_to_known_optimum():

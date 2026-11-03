@@ -103,7 +103,7 @@ class CausalSelfAttention(Module):
         v = qkv[:, :, 2 * c:3 * c].reshape(b, t, h, hd).transpose(0, 2, 1, 3)
         att = (q @ k.transpose(0, 1, 3, 2)) * (hd ** -0.5)
         future = np.triu(np.ones((t, t), dtype=bool), k=1)
-        att = att.masked_fill(future, -1e9)
+        att = att.masked_fill(future, -np.inf)
         att = softmax(att, axis=-1)
         y = (att @ v).transpose(0, 2, 1, 3).reshape(b, t, c)
         return self.proj(y)

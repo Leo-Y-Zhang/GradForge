@@ -20,6 +20,21 @@ def test_targets_are_the_inputs_shifted_one_character_ahead():
     assert (y == x + 1).all()               # and each target is the next id
 
 
+def test_get_batch_with_exactly_one_window():
+    ids = np.arange(5)
+    x, y = get_batch(np.random.default_rng(0), ids, block_size=4, batch_size=3)
+    assert np.array_equal(x, np.tile(ids[:-1], (3, 1)))
+    assert np.array_equal(y, np.tile(ids[1:], (3, 1)))
+
+
+def test_get_batch_can_reach_every_window_including_the_last():
+    ids = np.arange(8)
+    x, y = get_batch(np.random.default_rng(0), ids, block_size=4, batch_size=64)
+    assert np.array_equal(np.unique(x[:, 0]), np.arange(4))
+    assert x.shape == y.shape == (64, 4)
+    assert np.array_equal(y, x + 1)
+
+
 def test_checkpoint_round_trip_restores_every_parameter(tmp_path):
     chars = list("abcdefg")
     model = GPT(vocab_size=7, block_size=8, d_model=16, n_layer=2, n_head=2, seed=5)
