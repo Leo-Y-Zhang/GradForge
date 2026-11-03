@@ -1,55 +1,53 @@
 # GradForge
 
 A reverse-mode autograd engine written from scratch, a tiny GPT built on top
-of it, and a test suite that proves the mathematics instead of asserting it.
+of it, and a test suite that checks the gradients numerically at sampled points.
 
 The only runtime dependency is numpy, used strictly as array arithmetic --
-every derivative rule is hand-written and every one of them is verified
-against central-difference numerical differentiation. (Why numpy at all?
+every derivative rule is hand-written and checked numerically at sampled
+points using central differences, which provide evidence rather than proof. (Why numpy at all?
 Nested-list tensors were measured at 62.6 Mflop/s on the development machine
 versus numpy's 15.1 Gflop/s; training the demo model would take about four and
 a half hours instead of three minutes. The measurement is in
 [docs/DESIGN.md](docs/DESIGN.md).)
 
-## What proves what
+## What the tests check
 
-Frameworks ask you to trust `.backward()`. This repo doesn't ask:
+The suite compares analytic gradients with numerical estimates and checks
+concrete behavior:
 
-| Claim | Proof |
+| Claim | Test |
 |---|---|
-| Every op's gradient is correct | Central-difference check on each primitive op (rel. tol 1e-6, float64), including broadcast operands reduced over negative axes, batched matmul, duplicate fancy indices, reused nodes, non-contiguous views and zero-size axes |
-| Every layer's gradient is correct | Same check through Linear, LayerNorm, Embedding (with repeated tokens), causal self-attention, MLP, a full block, and the whole GPT end to end |
-| Attention is actually causal | Perturb the last position, assert earlier outputs are bit-unchanged |
+| Primitive gradients agree with numerical estimates at sampled points | Central-difference check on each primitive op (normalized error < 1e-6, float64), including broadcast operands reduced over negative axes, batched matmul, duplicate fancy indices, reused nodes, non-contiguous views and zero-size axes |
+| Layer gradients agree with numerical estimates at sampled points | Same check through Linear, LayerNorm, Embedding (with repeated tokens), causal self-attention, MLP, a full block, and the whole GPT end to end |
+| Attention is causal in the tested cases | Perturb the last position, assert exact equality of earlier outputs, including with scores of magnitude > 1e12; gradients remain finite |
 | Softmax/cross-entropy are stable | Logits of +-1e4 must give finite outputs and finite gradients (log-softmax's matches its closed form); the test also shows the naive formula overflowing there; `-inf` logits get exactly zero gradient |
 | Training is deterministic | Same seed, two independent runs, exact float equality of every loss value |
 | The gradients can actually learn | A 1-layer GPT must memorize a fixed batch to loss < 0.1 |
-| Adam is implemented right | Solves a seeded regression to its known optimum; a separate test pins the bias-corrected first-step size, which uncorrected Adam fails |
-| SGD+momentum is implemented right | Two steps match a hand-computed trace to 1e-12 |
+| Adam learns and uses bias correction in the tested cases | Reaches loss < 1e-6 on a seeded regression; separate tests check the bias-corrected first-step size, including a parameter that starts late |
+| SGD+momentum matches a hand trace | Two steps match a hand-computed trace with rtol=0, atol=1e-12 |
 
-## Run the proof yourself
+## Run the checks yourself
 
-The table above is checkable in one command. `gradcheck` differentiates every
-primitive and the whole model, compares each analytic gradient against a
-central-difference estimate, and exits non-zero if any of them disagrees:
+Run the test suite with `python -m pytest -q` to check the table above.
+The `gradforge gradcheck` command checks primitive gradients and sampled
+model parameter gradients against central-difference estimates, and exits
+non-zero if a checked gradient exceeds the tolerance:
 
 ```
 pip install -e .
 
-gradforge gradcheck      # every gradient, numerically verified
+gradforge gradcheck      # checks gradients numerically at sampled points
 gradforge train          # train the demo GPT; loss falls from ~4.9
 gradforge sample         # generate from the checkpoint
 gradforge bench          # the matmul throughput quoted above, on your machine
 ```
 
-Measured on the development machine, worst relative error `2.0e-08` across
-eighteen primitive checks and the full GPT loss — the primitives land between
-`8e-13` and `1.4e-10`, and the end-to-end check is looser only because it samples
-parameters rather than sweeping thousands of forward passes.
+The command checks eighteen primitive cases and the full GPT loss at sampled
+parameter elements, with a normalized error tolerance of `1e-6`.
 
-Each key test was watched failing first: break the op (flip a sign in matmul's
-backward, swap scatter-add for assignment, drop the softmax shift, remove the
-causal mask, un-correct Adam), see red, restore, see green. A test that has
-never failed is decoration.
+The suite also injects deliberately wrong derivatives and checks that both
+`gradcheck` and the CLI reject them.
 
 ## The demo model
 
@@ -96,7 +94,7 @@ gradforge/__main__.py    the gradforge command: gradcheck, train, sample, bench
 gradforge/data.py        char codec + batching over the bundled excerpt
 gradforge/train.py       bounded demo training (python -m gradforge.train)
 gradforge/sample.py      text generation      (python -m gradforge.sample)
-tests/                   the proof obligations (78 tests)
+tests/                   numerical and behavioral checks (86 tests)
 docs/DESIGN.md           architecture and the measured numpy decision
 ```
 
@@ -115,10 +113,10 @@ A real framework has a float32/mixed-precision path, GPU kernels, graph
 memory management, operator fusion, a stable public API, and years of edge
 cases. This has none of that: float64 on CPU, basic-plus-integer-array
 indexing only, scalar exponents only, and a Tensor API just big enough for
-the model it trains. The point is a complete, verified core that one person
+the model it trains. The point is a numerically checked core that one person
 can read end to end: 332 lines for the engine, 69 for the composed math,
-161 for the layers, 65 for the optimizers, 84 for the gradient checker --
-711 lines of source for a working, gradient-checked transformer.
+161 for the layers, 65 for the optimizers, 86 for the gradient checker --
+713 lines of source for a working, gradient-checked transformer.
 
 ## License
 

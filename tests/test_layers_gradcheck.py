@@ -59,8 +59,30 @@ def test_attention_is_causal():
     from gradforge.tensor import Tensor
     y1 = attn(x1).data
     y2 = attn(Tensor(x2_data)).data
-    assert np.allclose(y1[0, :3], y2[0, :3])  # earlier positions unchanged
+    assert np.array_equal(y1[0, :3], y2[0, :3])  # earlier positions unchanged
     assert not np.allclose(y1[0, 3], y2[0, 3])  # last position did change
+
+
+def test_attention_is_causal_with_large_negative_scores():
+    from gradforge.tensor import Tensor
+    attn = CausalSelfAttention(2, 1, np.random.default_rng(44))
+    eye = np.eye(2)
+    attn.qkv.weight.data[...] = np.concatenate([-1e6 * eye, 1e6 * eye, eye], axis=1)
+    attn.qkv.bias.data[...] = 0.0
+    attn.proj.weight.data[...] = eye
+    attn.proj.bias.data[...] = 0.0
+    x1 = Tensor([[[1.0, 2.0], [2.0, 1.0], [3.0, 1.0], [1.0, 3.0]]],
+                requires_grad=True)
+    x2_data = x1.data.copy()
+    x2_data[0, 3, :] *= -10.0
+    x2 = Tensor(x2_data, requires_grad=True)
+    y1, y2 = attn(x1), attn(x2)
+    assert np.isfinite(y1.data).all() and np.isfinite(y2.data).all()
+    assert np.array_equal(y1.data[0, :3], y2.data[0, :3])
+    assert not np.array_equal(y1.data[0, 3], y2.data[0, 3])
+    (y1.sum() + y2.sum()).backward()
+    for p in attn.parameters() + [x1, x2]:
+        assert np.isfinite(p.grad).all()
 
 
 def test_mlp():
