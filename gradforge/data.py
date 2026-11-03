@@ -35,7 +35,7 @@ class CharCodec:
 def get_batch(rng: np.random.Generator, ids: np.ndarray,
               block_size: int, batch_size: int):
     """Sample (x, y) where y is x shifted one character ahead."""
-    starts = rng.integers(0, len(ids) - block_size - 1, size=batch_size)
+    starts = rng.integers(0, len(ids) - block_size, size=batch_size)
     x = np.stack([ids[s:s + block_size] for s in starts])
     y = np.stack([ids[s + 1:s + 1 + block_size] for s in starts])
     return x, y

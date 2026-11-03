@@ -28,6 +28,8 @@ def gradcheck(fn, wrt, h: float = 1e-5, tol: float = 1e-6,
 
     Returns the max relative error seen; raises AssertionError on breach.
     """
+    if max_elems is not None and max_elems <= 0:
+        raise ValueError("max_elems must be positive")
     wrt = list(wrt)
     for p in wrt:
         p.grad = None

@@ -53,6 +53,22 @@ def test_gradcheck_rejects_a_wrong_derivative():
         gradcheck(lambda: (_scaled_exp(x, 1.0 + 1e-4) * c).sum(), [x], tol=TOL)
 
 
+@pytest.mark.parametrize("samples", [0, -1])
+def test_gradcheck_rejects_non_positive_sample_counts(samples):
+    x = Tensor(np.ones((2, 3)), requires_grad=True)
+    with pytest.raises(ValueError, match="max_elems must be positive"):
+        gradcheck(lambda: _scaled_exp(x, 2.0).sum(), [x],
+                  rng=np.random.default_rng(62), max_elems=samples)
+
+
+@pytest.mark.parametrize("samples", [1, 3, 6])
+def test_gradcheck_sampling_catches_a_wrong_derivative(samples):
+    x = Tensor(np.ones((2, 3)), requires_grad=True)
+    with pytest.raises(AssertionError, match="gradcheck failed"):
+        gradcheck(lambda: _scaled_exp(x, 2.0).sum(), [x],
+                  rng=np.random.default_rng(62), max_elems=samples)
+
+
 def test_gradcheck_refuses_a_gradient_of_the_wrong_shape():
     # A backward rule that forgets to sum over a broadcast axis leaves a (3,)
     # tensor holding a (2, 3) gradient. Here the first row is exactly the true
